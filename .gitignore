@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.eggs/
+pip-wheel-metadata/
+*.whl
+
+# Virtual environments
+venv/
+env/
+.env
+.venv/
+ENV/
+
+# FastAPI / SQLite
+*.db
+*.sqlite3
+cyclonex.db
+
+# ML weights (too large for git)
+ml_weights/
+*.pt
+*.pth
+*.pkl
+*.h5
+*.onnx
+
+# Logs
+*.log
+logs/
+
+# Node / Vite / React
+node_modules/
+dist/
+.cache/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.local
+.env.production
+.env.development
+
+# Test artifacts
+test_output/
+__snapshots__/

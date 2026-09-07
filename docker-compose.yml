@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgis/postgis:15-3.4
+    environment:
+      POSTGRES_DB: cyclonex
+      POSTGRES_USER: cyclonex
+      POSTGRES_PASSWORD: cyclonex_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cyclonex:cyclonex_secret@db:5432/cyclonex
+      REDIS_URL: redis://redis:6379
+      DATA_SOURCE: synthetic
+      MODEL_WEIGHTS_PATH: /app/ml_weights/cyclonex_model.pt
+      XAI_OUTPUT_DIR: /app/static/xai
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+      - model_weights:/app/ml_weights
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  model_weights:
