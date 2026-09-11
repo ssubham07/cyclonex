@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api/v1', timeout: 30000 });
+// Production: reads VITE_API_URL from Vercel environment variable
+// Development: proxied through Vite to localhost:8000
+const VITE_API = import.meta.env.VITE_API_URL as string | undefined;
+const BASE = VITE_API ? `${VITE_API}/api/v1` : '/api/v1';
+
+const api = axios.create({
+  baseURL: BASE,
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface Cyclone { id:number; name:string; year:number; source:string; category?:string; category_code?:number; max_wind_kt?:number; min_pressure_hpa?:number; current_lat?:number; current_lon?:number; confidence:number; flagged_for_review?:boolean; }
