@@ -1,6 +1,6 @@
 """
 CycloNex — AI Cyclone Intelligence System
-FastAPI Main Application
+FastAPI Main Application — Production Ready (Render.com / Railway)
 """
 import logging
 import os
@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import init_db
@@ -37,17 +38,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Seed skipped: {e}")
 
-    # Pre-load model (non-blocking — will log if weights missing)
+    # Pre-load model (non-blocking — synthetic fallback if weights missing)
     try:
         from app.ml.inference import get_model
         get_model()
     except Exception as e:
         logger.warning(f"Model pre-load: {e}")
 
-    # Ensure XAI output dir exists
+    # Ensure static/XAI output dir exists
     os.makedirs(settings.XAI_OUTPUT_DIR, exist_ok=True)
+    os.makedirs("./static", exist_ok=True)
 
-    logger.info("🚀 CycloNex ready — http://localhost:8000/docs")
+    port = os.environ.get("PORT", "8000")
+    logger.info(f"🚀 CycloNex ready — port {port} — /docs")
     yield
 
     logger.info("🛑 CycloNex shutting down...")
@@ -66,20 +69,21 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS
+# ── CORS: allow Vercel frontend + all origins ────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,   # must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# Static files (XAI images)
-os.makedirs(settings.XAI_OUTPUT_DIR, exist_ok=True)
+# ── Static files (XAI heatmap images) ───────────────────────────────────────
+os.makedirs("./static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="./static"), name="static")
 
-# Routers
+# ── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(cyclones.router)
 app.include_router(predict.router)
 app.include_router(alerts.router)
@@ -88,33 +92,39 @@ app.include_router(reports.router)
 app.include_router(metrics.router, prefix="/api/v1")
 
 
+# ── Health check ─────────────────────────────────────────────────────────────
 @app.get("/api/v1/health", tags=["health"])
 async def health():
     from app.ml.inference import _model_loaded, _model
     try:
         from app.database import engine
+        import sqlalchemy
         async with engine.connect() as conn:
-            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+            await conn.execute(sqlalchemy.text("SELECT 1"))
         db_ok = True
-    except Exception:
+    except Exception as ex:
+        logger.warning(f"DB health check failed: {ex}")
         db_ok = False
 
-    return {
+    return JSONResponse({
         "status": "ok",
         "model_loaded": _model is not None,
         "model_weights_found": os.path.exists(settings.MODEL_WEIGHTS_PATH),
         "data_source": settings.DATA_SOURCE,
         "db_connected": db_ok,
         "version": settings.APP_VERSION,
+        "frontend": settings.FRONTEND_URL,
         "disclaimer": "CycloNex is an AI/ML prototype. Not an official IMD warning system.",
-    }
+    })
 
 
 @app.get("/", tags=["root"])
 async def root():
-    return {
+    return JSONResponse({
         "name": "CycloNex API",
+        "version": settings.APP_VERSION,
         "docs": "/docs",
         "health": "/api/v1/health",
-        "version": settings.APP_VERSION,
-    }
+        "frontend": settings.FRONTEND_URL,
+        "status": "online",
+    })

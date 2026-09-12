@@ -1,60 +1,87 @@
 import axios from 'axios';
 
-// Backend: Cloudflare tunnel → local FastAPI (SQLite DB)
-// Dev: proxied via Vite to localhost:8000
+// ── Backend URL resolution ────────────────────────────────────────────────────
+// Priority: 1) Vite env var  2) localStorage override  3) localhost proxy (dev)
 const _env = (import.meta as any).env || {};
-const VITE_API: string = _env.VITE_API_URL || 'https://generations-ministry-earn-subject.trycloudflare.com';
-const BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+const _stored = typeof localStorage !== 'undefined' ? localStorage.getItem('CYCLONEX_API') : null;
+const _viteUrl: string = _env.VITE_API_URL || '';
+const _isLocal = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+export const BACKEND_URL: string = _isLocal
+  ? 'http://localhost:8000'
+  : (_viteUrl || _stored || 'https://techniques-gel-compression-altered.trycloudflare.com');
+
+const BASE = _isLocal
   ? '/api/v1'
-  : `${VITE_API}/api/v1`;
+  : `${BACKEND_URL}/api/v1`;
 
-
-const api = axios.create({
+export const api = axios.create({
   baseURL: BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-
+// Helper to override backend URL at runtime (used by dashboard status check)
+export function setBackendUrl(url: string) {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('CYCLONEX_API', url);
+  }
+  api.defaults.baseURL = `${url}/api/v1`;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
-export interface Cyclone { id:number; name:string; year:number; source:string; category?:string; category_code?:number; max_wind_kt?:number; min_pressure_hpa?:number; current_lat?:number; current_lon?:number; confidence:number; flagged_for_review?:boolean; }
-export interface TrackPoint { id:number; cyclone_id:number; timestamp:string; lat:number; lon:number; wind_kt?:number; pressure_hpa?:number; is_forecast:boolean; }
-export interface IntensityPoint { timestamp:string; wind_kt?:number; pressure_hpa?:number; is_forecast:boolean; }
-export interface Alert { tier:string; color:string; cyclone_name?:string; wind_kt?:number; category?:string; message:string; }
-export interface HealthStatus { status:string; db_connected:boolean; model_loaded:boolean; }
+export interface Cyclone {
+  id: number; name: string; year: number; source: string;
+  category?: string; category_code?: number; max_wind_kt?: number;
+  min_pressure_hpa?: number; current_lat?: number; current_lon?: number;
+  confidence: number; flagged_for_review?: boolean;
+}
+export interface TrackPoint {
+  id: number; cyclone_id: number; timestamp: string;
+  lat: number; lon: number; wind_kt?: number; pressure_hpa?: number; is_forecast: boolean;
+}
+export interface IntensityPoint {
+  timestamp: string; wind_kt?: number; pressure_hpa?: number; is_forecast: boolean;
+}
+export interface Alert {
+  tier: string; color: string; cyclone_name?: string;
+  wind_kt?: number; category?: string; message: string;
+}
+export interface HealthStatus {
+  status: string; db_connected: boolean; model_loaded: boolean;
+}
 export interface Prediction {
-  detected:boolean; detection_prob:number; category?:string; category_code?:number;
-  max_wind_kt?:number; confidence:number; center_lat?:number; center_lon?:number;
-  intensity_trend?:string; intensity_probs?:number[]; wind_24h_kt?:number;
-  track_forecast?:Array<{hour:number;lat:number;lon:number;wind_kt?:number;confidence_radius_km?:number}>;
-  wind_forecast?:Array<{hour:number;wind_kt:number;lower:number;upper:number}>;
-  cnn_class_probs?:number[]; cnn_layer_acts?:Array<{layer:string;mean_act:number;max_act?:number;n_maps?:number}>;
-  cnn_feature_snippet?:number[]; preprocess_stats?:Record<string,{min:number;max:number;mean:number;std:number}>;
-  xai_evidence?:string; flagged_for_review:boolean;
-  pipeline_steps?:string[]; model_stack?:any; timestamp?:string;
+  detected: boolean; detection_prob: number; category?: string; category_code?: number;
+  max_wind_kt?: number; confidence: number; center_lat?: number; center_lon?: number;
+  intensity_trend?: string; intensity_probs?: number[]; wind_24h_kt?: number;
+  track_forecast?: Array<{ hour: number; lat: number; lon: number; wind_kt?: number; confidence_radius_km?: number }>;
+  wind_forecast?: Array<{ hour: number; wind_kt: number; lower: number; upper: number }>;
+  cnn_class_probs?: number[]; cnn_layer_acts?: Array<{ layer: string; mean_act: number; max_act?: number; n_maps?: number }>;
+  cnn_feature_snippet?: number[]; preprocess_stats?: Record<string, { min: number; max: number; mean: number; std: number }>;
+  xai_evidence?: string; flagged_for_review: boolean;
+  pipeline_steps?: string[]; model_stack?: any; timestamp?: string;
 }
 export interface Metrics {
-  detection:{ precision:number; recall:number; f1_score:number; auc_roc:number; true_positives:number; false_positives:number; false_negatives:number; true_negatives:number; };
-  center_location:{ mean_position_error_km:number; median_position_error_km:number; within_50km_pct:number; within_110km_pct:number; };
-  intensity:{ wind_mae_kt:number; wind_rmse_kt:number; pressure_mae_hpa:number; category_accuracy:number; category_macro_f1:number; };
-  track_forecast:{ error_6h_km:number; error_12h_km:number; error_24h_km:number; error_48h_km:number; error_72h_km:number; };
-  uncertainty:{ calibration_error:number; interval_coverage_90:number; sharpness:number; };
-  operational:{ avg_latency_ms:number; p95_latency_ms:number; throughput_fps:number; data_delay_tolerance_min:number; uptime_pct:number; uptime_seconds:number; };
-  system:Record<string,string>;
-  training_history:Array<{epoch:number;loss:number;accuracy:number;val_loss:number;val_accuracy:number}>;
+  detection: { precision: number; recall: number; f1_score: number; auc_roc: number; true_positives: number; false_positives: number; false_negatives: number; true_negatives: number; };
+  center_location: { mean_position_error_km: number; median_position_error_km: number; within_50km_pct: number; within_110km_pct: number; };
+  intensity: { wind_mae_kt: number; wind_rmse_kt: number; pressure_mae_hpa: number; category_accuracy: number; category_macro_f1: number; };
+  track_forecast: { error_6h_km: number; error_12h_km: number; error_24h_km: number; error_48h_km: number; error_72h_km: number; };
+  uncertainty: { calibration_error: number; interval_coverage_90: number; sharpness: number; };
+  operational: { avg_latency_ms: number; p95_latency_ms: number; throughput_fps: number; data_delay_tolerance_min: number; uptime_pct: number; uptime_seconds: number; };
+  system: Record<string, string>;
+  training_history: Array<{ epoch: number; loss: number; accuracy: number; val_loss: number; val_accuracy: number }>;
 }
 
 // ── API calls ──────────────────────────────────────────────────────────────
 export const fetchHealth    = () => api.get<HealthStatus>('/health').then(r => r.data);
 export const fetchCyclones  = () => api.get<Cyclone[]>('/cyclones').then(r => r.data);
-export const fetchCyclone   = (id:number) => api.get<Cyclone>(`/cyclones/${id}`).then(r => r.data);
-export const fetchTrack     = (id:number) => api.get<TrackPoint[]>(`/cyclones/${id}/track`).then(r => r.data);
-export const fetchIntensity = (id:number) => api.get<IntensityPoint[]>(`/cyclones/${id}/intensity`).then(r => r.data);
+export const fetchCyclone   = (id: number) => api.get<Cyclone>(`/cyclones/${id}`).then(r => r.data);
+export const fetchTrack     = (id: number) => api.get<TrackPoint[]>(`/cyclones/${id}/track`).then(r => r.data);
+export const fetchIntensity = (id: number) => api.get<IntensityPoint[]>(`/cyclones/${id}/intensity`).then(r => r.data);
 export const fetchAlerts    = () => api.get<Alert[]>('/alerts').then(r => r.data);
 export const fetchMetrics   = () => api.get<Metrics>('/metrics').then(r => r.data);
-export const submitReview   = (body:any) => api.post('/review', body).then(r => r.data);
-export const getReportUrl   = (id:number, fmt:string) => `/api/v1/reports/${id}/export?format=${fmt}`;
+export const submitReview   = (body: any) => api.post('/review', body).then(r => r.data);
 
 export const runPredict = (
   data_source = 'synthetic',
