@@ -1,15 +1,20 @@
 import axios from 'axios';
 
-// Production: reads VITE_API_URL from Vercel environment variable
-// Development: proxied through Vite to localhost:8000
-const VITE_API = import.meta.env.VITE_API_URL as string | undefined;
-const BASE = VITE_API ? `${VITE_API}/api/v1` : '/api/v1';
+// Backend: Cloudflare tunnel → local FastAPI (SQLite DB)
+// Dev: proxied via Vite to localhost:8000
+const _env = (import.meta as any).env || {};
+const VITE_API: string = _env.VITE_API_URL || 'https://generations-ministry-earn-subject.trycloudflare.com';
+const BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? '/api/v1'
+  : `${VITE_API}/api/v1`;
+
 
 const api = axios.create({
   baseURL: BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
+
 
 
 // ── Types ──────────────────────────────────────────────────────────────────
