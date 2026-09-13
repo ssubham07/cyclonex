@@ -1,34 +1,23 @@
 import axios from 'axios';
 
-// ── Backend URL resolution ────────────────────────────────────────────────────
-// Priority: 1) Vite env var  2) localStorage override  3) localhost proxy (dev)
+// ── Backend URL ─────────────────────────────────────────────────────────────
+// When served from the same origin (Render full-stack): use relative /api/v1
+// Dev mode (localhost:5173): Vite proxy forwards /api → localhost:8000
+// Override: set CYCLONEX_API in localStorage to point to any backend
 const _env = (import.meta as any).env || {};
-const _stored = typeof localStorage !== 'undefined' ? localStorage.getItem('CYCLONEX_API') : null;
-const _viteUrl: string = _env.VITE_API_URL || '';
-const _isLocal = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const _override = typeof localStorage !== 'undefined' ? localStorage.getItem('CYCLONEX_API') : null;
 
-export const BACKEND_URL: string = _isLocal
-  ? 'http://localhost:8000'
-  : (_viteUrl || _stored || 'https://techniques-gel-compression-altered.trycloudflare.com');
-
-const BASE = _isLocal
-  ? '/api/v1'
-  : `${BACKEND_URL}/api/v1`;
+// Production on Render = same origin, so just use relative path
+// Dev = Vite proxy handles /api → 8000
+const BASE = _env.VITE_API_URL
+  ? `${_env.VITE_API_URL}/api/v1`
+  : (_override ? `${_override}/api/v1` : '/api/v1');
 
 export const api = axios.create({
   baseURL: BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
-
-// Helper to override backend URL at runtime (used by dashboard status check)
-export function setBackendUrl(url: string) {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('CYCLONEX_API', url);
-  }
-  api.defaults.baseURL = `${url}/api/v1`;
-}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface Cyclone {
@@ -82,7 +71,6 @@ export const fetchIntensity = (id: number) => api.get<IntensityPoint[]>(`/cyclon
 export const fetchAlerts    = () => api.get<Alert[]>('/alerts').then(r => r.data);
 export const fetchMetrics   = () => api.get<Metrics>('/metrics').then(r => r.data);
 export const submitReview   = (body: any) => api.post('/review', body).then(r => r.data);
-
 export const runPredict = (
   data_source = 'synthetic',
   cyclone_id?: number,
