@@ -1,23 +1,21 @@
 services:
   - type: web
-    name: cyclonex
+    name: cyclonex-backend
     runtime: python
-    buildCommand: |
-      pip install --upgrade pip &&
-      pip install -r backend/requirements.txt &&
-      cd frontend && npm ci && npm run build &&
-      mkdir -p ../backend/static/frontend &&
-      cp -r dist/* ../backend/static/frontend/
-    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /api/v1/health
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./cyclonex.db
       - key: SECRET_KEY
         generateValue: true
+      - key: FRONTEND_URL
+        value: https://cyclonex-iota.vercel.app
       - key: DEBUG
         value: "false"
-      - key: PYTHON_VERSION
-        value: "3.11.0"
-      - key: NODE_VERSION
-        value: "20"
+      - key: DATA_SOURCE
+        value: synthetic

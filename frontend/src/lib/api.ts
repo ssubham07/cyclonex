@@ -1,25 +1,22 @@
 import axios from 'axios';
 
-// ── Backend URL ─────────────────────────────────────────────────────────────
-// When served from the same origin (Render full-stack): use relative /api/v1
-// Dev mode (localhost:5173): Vite proxy forwards /api → localhost:8000
-// Override: set CYCLONEX_API in localStorage to point to any backend
-const _env = (import.meta as any).env || {};
-const _override = typeof localStorage !== 'undefined' ? localStorage.getItem('CYCLONEX_API') : null;
+// ── Backend URL ──────────────────────────────────────────────────────────────
+// Dev:        Vite proxy forwards /api → localhost:8000 (no env var needed)
+// Production: VITE_API_URL set in Vercel dashboard → Render backend URL
+const _env = (import.meta as any).env ?? {};
+const VITE_API_URL: string = _env.VITE_API_URL ?? '';
 
-// Production on Render = same origin, so just use relative path
-// Dev = Vite proxy handles /api → 8000
-const BASE = _env.VITE_API_URL
-  ? `${_env.VITE_API_URL}/api/v1`
-  : (_override ? `${_override}/api/v1` : '/api/v1');
+// Local dev uses Vite proxy (/api/v1 → localhost:8000/api/v1)
+// Production uses the full Render backend URL from VITE_API_URL
+const BASE_URL = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1';
 
 export const api = axios.create({
-  baseURL: BASE,
+  baseURL: BASE_URL,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 export interface Cyclone {
   id: number; name: string; year: number; source: string;
   category?: string; category_code?: number; max_wind_kt?: number;
@@ -62,7 +59,7 @@ export interface Metrics {
   training_history: Array<{ epoch: number; loss: number; accuracy: number; val_loss: number; val_accuracy: number }>;
 }
 
-// ── API calls ──────────────────────────────────────────────────────────────
+// ── API calls ─────────────────────────────────────────────────────────────────
 export const fetchHealth    = () => api.get<HealthStatus>('/health').then(r => r.data);
 export const fetchCyclones  = () => api.get<Cyclone[]>('/cyclones').then(r => r.data);
 export const fetchCyclone   = (id: number) => api.get<Cyclone>(`/cyclones/${id}`).then(r => r.data);
